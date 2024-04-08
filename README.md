@@ -1,188 +1,149 @@
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-# Deploying FastAPI on AWS, Using PostgreSQL RDS
-
-## Synopsis
-This project details the deployment of a Python FastAPI project, which uses a PostgreSQL RDS database, to AWS. The AWS technologies used in production are:
-- RDS
-- Lambda
-- Cloud Formation
-- API Gateway
-- S3
-
-## Standing on the backs of giants
-Major shoutout to [iwpnd](https://iwpnd.pw/). I followed his [tutorial](https://iwpnd.pw/articles/2020-01/deploy-fastapi-to-aws-lambda) to have a successful first basic deployment. He also provided sage advice when I got stuck in a few places. Essentially, I catered his project to my specific needs, and added the ability to connect to a PostgreSQL database.
-
-## Motivation
-I participate in a "fitness challenge" where players log daily points. The format of the collected data is not ideal, so I aim to clean this data, store it indefinitely on AWS in RDS, and make it available via FastAPI so that others can use the data for analysis.
-
-## Files
-```
 .
 ├── app
 |   ├── __init__.py
-│   ├── crud.py
-│   ├── database.py
-│   ├── main.py
-│   ├── models.py
-│   ├── routers
-│   │   ├── __init__.py
-│   │   ├── players.py
-│   │   ├── seasons.py
-│   │   └── teams.py
-│   └── schemas.py
+│   ├── crud.py
+│   ├── database.py
+│   ├── main.py
+│   ├── models.py
+│   ├── routers
+│   │   ├── __init__.py
+│   │   ├── players.py
+│   │   ├── seasons.py
+│   │   └── teams.py
+│   └── schemas.py
 ├── .pre-commit.yaml
 ├── LICENSE
 ├── README.md
 ├── requirements.txt
 └── template.yml
-```
 
-- `crud.py`: specifies crud (create, read, update, delete) actions
-- `database.py`: sets up connection with PostgreSQL
-- `main.py`: brings all routes together
-- `models.py`: sqlalchemy models specified
-- `schemas.py`: pydantic models specified, which I believe dictates the output format when API is called
-- `routers/`: folder containing subsets of routes
-- `.pre-commit.yaml`: config file for pre-commit tool
-- `requirements.txt`: requirements to install when project is built using sam
-- `template.yml`: essentially the recipe for deploying the project to AWS
 
-## Setup (linux)
-### Install and configure AWS CLI and SAM
-In order to proceed with set-up and deployment, AWS CLI and SAM need to be installed and configured on your machine. 
-- [Install CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
-- [Configure CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
-- [Install SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
+crud.py: spécifie les actions crud (créer, lire, mettre à jour, supprimer)
+database.py: configure la connexion avec PostgreSQL
+main.py: rassemble toutes les routes
+models.py: modèles sqlalchemy spécifiés
+schemas.py: modèles pydantic spécifiés, qui je crois dictent le format de sortie lorsque l'API est appelée
+routers/: dossier contenant des sous-ensembles de routes
+.pre-commit.yaml: fichier de configuration pour l'outil pre-commit
+requirements.txt: exigences à installer lors de la construction du projet en utilisant sam
+template.yml: essentiellement la recette pour déployer le projet sur AWS
+Configuration (Linux)
+Installer et configurer AWS CLI et SAM
+Pour procéder à la configuration et au déploiement, AWS CLI et SAM doivent être installés et configurés sur votre machine.
 
-### Create AWS Role
-1) IAM Console >> Roles >> Create
-2) Select `AWS service` as type, and choose `Lambda` and use case
-3) Add policies:
-   - `AWSLambdaBasicExecutionRole`: Permission to upload logs to CloudWatch
-   - `AWSLambdaVPCAccessExecutionRole`: Permission to connect our Lambda function to a VPC
-4) Finish creating role, and set name as `fastapilambdarole`. This name matches role specified in `template.yml`. 
+Installer CLI
+Configurer CLI
+Installer SAM
+Créer un rôle AWS
+Console IAM >> Rôles >> Créer
+Sélectionnez Service AWS comme type et choisissez Lambda et cas d'utilisation
+Ajoutez des politiques :
+AWSLambdaBasicExecutionRole : Autorisation d'envoyer des journaux vers CloudWatch
+AWSLambdaVPCAccessExecutionRole : Autorisation de connecter notre fonction Lambda à un VPC
+Terminez la création du rôle et définissez le nom comme fastapilambdarole. Ce nom correspond au rôle spécifié dans template.yml.
+Créer un compartiment S3
+Lorsque nous déployons notre code avec AWS SAM, un dossier zip de notre code sera téléchargé dans S3. Il existe deux options pour créer un compartiment S3.
 
-### Create S3 Bucket
-When we deploy our code with AWS SAM, a zip folder of our code will be uploaded to S3. There are two options for creating an S3 bucket. 
+(1) Dans la console AWS
+(2) Avec le AWS CLI
 
-(1) In the [AWS console](https://docs.aws.amazon.com/AmazonS3/latest/gsg/CreatingABucket.html)  
-(2) With the [AWS CLI](https://docs.aws.amazon.com/cli/latest/reference/s3api/create-bucket.html)
-```
+lua
+ 
 aws s3api create-bucket \
---bucket {your bucket name here} \
+--bucket {votre nom de compartiment ici} \
 --region eu-central-1 \
 --create-bucket-configuration LocationConstraint=eu-central-1
-```
+Veuillez noter que les noms de compartiment S3 doivent être globalement uniques. Ainsi, le nom du compartiment que vous créez ici déterminera le nom du compartiment utilisé dans les étapes ultérieures. De plus, assurez-vous de changer la région à votre région locale.
 
-Please note that S3 bucket names need to be globally unique. So the name of the bucket you create here will determine the bucket name used in later steps. Also, ensure that you change the region to your local region. 
-
-### Clone project and test locally
-```
+Cloner le projet et tester localement
+ 
+ 
 git clone https://github.com/KurtKline/fastapi-postgres-aws-lambda.git
 cd fastapi-postgres-aws-lambda
-# create and activate a virtual environment
+# créer et activer un environnement virtuel
 pip install -r requirements.txt
 pip install uvicorn
-```
+Pour tester localement sans erreurs, PostgreSQL doit être installé sur votre machine locale, et les données d'exemple doivent être chargées dans une table de base de données.
+Installation de PostgreSQL sur Ubuntu 20.04
 
-In order to test locally without errors, PostgreSQL needs to be installed on your local machine, and the sample data needs to be loaded into a database table. 
-[Installing PostgreSQL on Ubuntu 20.04](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
+Depuis le terminal Linux :
 
-From the linux terminal: 
-```
 psql
 postgres=# CREATE DATABASE fitness;
 postgres=# CREATE TABLE fit (id serial, player varchar(50), team varchar(50), season varchar(50), data_date date, points float);
 postgres=# \copy fit(player, team, season, data_date, points) from 'clean_fit.csv' with DELIMITER ',' CSV HEADER;
-```
+Démarrer FastAPI
 
-Start FastAPI
-```
+ 
+ 
 uvicorn app.main:app --reload
-# click the link to open the browser at http://127.0.0.1:8000
-```
+# cliquez sur le lien pour ouvrir le navigateur à l'adresse http://127.0.0.1:8000
+Une fois que vous avez cliqué sur le lien, ajoutez /docs ou /redoc à l'URL http://127.0.0.1:8000/docs. Vous verrez alors l'interface Swagger.
 
-Once you click the link, add /docs or /redoc to the URL `http://127.0.0.1:8000/docs`. You will then see the Swagger UI.
+Configuration de l'instance RDS PostgreSQL
+Pour déployer sur AWS, notre code ET notre base de données doivent être sur AWS. Voici quelques directives de base pour configurer l'instance RDS PostgreSQL.
 
-### Setting up RDS PostgreSQL Instance
-In order to deploy to AWS, our code AND our database needs to live on AWS. Here are some basic guidelines to setting up the RDS PostgreSQL instance. 
+Dans les paramètres de l'instance RDS, assurez-vous que Accessibilité publique est définie sur Oui
+Spécifiez nom de la base de données initiale, qui sera utilisé dans pg_restore ci-dessous
+Liste blanche IP
+Créez un nouveau groupe de sécurité EC2
+Règles entrantes : Type: Trafic total, Source: Mon IP
+Ajoutez ce groupe de sécurité à l'instance RDS
+Comment accéder à l'instance RDS depuis le terminal Linux :
 
-1) In RDS instance settings, make sure `Public Accessibility` is set to `Yes`
-2) Specify `initial database name`, which will be used in pg_restore below
-3) Whitelist IP
-   - Create new EC2 security group
-   - Inbound Rules: `Type`: `All Traffic`, `Source`: `My IP`
-   - Add this security group to RDS instance
-
-How to gain access to RDS instance from Linux terminal:
-```
+css
+ 
 psql \
-   --host=<DB instance endpoint from AWS> \
+   --host=<point de terminaison de l'instance DB à partir d'AWS> \
    --port=<port> \
-   --username=<master user name> \
+   --username=<nom d'utilisateur principal> \
    --password \
-   --dbname=<database name>
-```
+   --dbname=<nom de la base de données>
+Une fois les données chargées dans votre instance RDS PostgreSQL, vous pouvez définir Accessibilité publique sur Non si vous le souhaitez. Cela empêche simplement les sources externes, comme votre PC local, d'accéder à votre instance RDS.
 
-Once the data is dumped into your RDS PostgreSQL instance, you can set `Public Accessibility` back to `No` if you'd like. This just prevents external sources, like your local PC, from accessing your RDS instance.
+Chargement de données dans RDS PostgreSQL
+Voici deux options pour charger les données dans RDS PostgreSQL
 
+Sauvegarde et restauration : si les données existent déjà dans PostgreSQL local
+Sauvegarde (faite à partir de la ligne de commande) : $ pg_dump -Fc mydb > db.dump
+Restaurer avec : pg_restore -v -h [point de terminaison RDS] -U [nom d'utilisateur principal ("postgres" par défaut)] -d [nom de la base de données RDS] [fichier de sauvegarde].dump
+Vérifiez que le chargement a réussi en vous connectant avec le bloc psql indiqué ci-dessus
+À partir du fichier .csv
+D'abord, connectez-vous à RDS via psql comme indiqué ci-dessus. Selon le nom de votre base de données, fit=> affiché ci-dessous peut être différent pour vous.
 
-### Loading data into RDS PostgreSQL
-
-Here are two options for loading the data into RDS PostgreSQL
-
-#### Dump and Restore: if data already exists in local PostgreSQL
-1) Dump (done from terminal line): `$ pg_dump -Fc mydb > db.dump`
-2) Restore with: `pg_restore -v -h [RDS endpoint] -U [master username ("postgres" by default)] -d [RDS database name] [dumpfile].dump`
-3) Verify load was successful by connecting with psql block shown above
-
-#### From .csv file
-First connect to RDS through psql as shown above. Depending on your database name, `fit=>` shown below may be different for you. 
-```
+sql
+ 
 fit=> create table fit (id serial, player varchar(50), team varchar(50), season varchar(50), data_date date, points float);
 fit=> \copy fit(player, team, season, data_date, points) from 'clean_fit.csv' with DELIMITER ',' CSV HEADER;
 COPY 105
-```
-
-More options for loading data into PostgreSQL RDS  
+Plus d'options pour charger des données dans PostgreSQL RDS
 https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL.Procedural.Importing.html
 
-### Deploying project with AWS SAM
-The `template.yml` file is used for deployment with AWS SAM. 
+Déploiement du projet avec AWS SAM
+Le fichier template.yml est utilisé pour le déploiement avec AWS SAM.
 
-(1) Replace the values in `template.yml` specified as `{replace}`.  
-(2) Uncomment `# openapi_prefix="/prod"` in `app/main.py`. This allows proper access of API when deployed.  
-(3) Run following steps for SAM in linux terminal  
-```
+(1) Remplacez les valeurs dans template.yml spécifiées comme {remplacer}.
+(2) Décommentez # openapi_prefix="/prod" dans app/main.py. Cela permet un accès approprié à l'API lorsqu'elle est déployée.
+(3) Exécutez les étapes suivantes pour SAM dans le terminal Linux
+
+ 
 sam validate
-```
-```
+css
+ 
 sam build --debug
-```
-```
-sam package --s3-bucket {your bucket name here} --output-template-file out.yml --region eu-central-1
-```
-```
+css
+ 
+sam package --s3-bucket {votre nom de compartiment ici} --output-template-file out.yml --region eu-central-1
+css
+ 
 sam deploy --template-file out.yml --stack-name example-stack-name --region eu-central-1 --no-fail-on-empty-changeset --capabilities CAPABILITY_IAM
-```
+Obstacles rencontrés en cours de route
+Accès à l'instance PostgreSQL RDS localement : Assurez-vous que Accessibilité publique est défini sur Oui, sinon vous obtiendrez une erreur de délai d'attente.
 
-## Bumps along the way
-- Accessing PostgreSQL RDS instance locally: Make sure `Public Accessibility` is set to `Yes`, otherwise you will get a timeout error.
+psycopg2-binary au lieu de psycopg2 : Pour une raison quelconque, AWS lambda ne fonctionne pas bien avec psycopg2, même si cela fonctionne localement
 
-- `psycopg2-binary` instead of `psycopg2`: For some reason, AWS lambda doesn't play well with `psycopg2`, even though it works locally
+Lambda VPC : Lorsque ce projet est déployé tel quel, la connexion VPC est définie sur aucun. J'ai dû changer cela en VPC personnalisé et ajouter mon VPC par défaut et mon groupe de sécurité ici. Cela a depuis été ajouté directement dans le fichier template.yml.
 
-- Lambda VPC: When this project is deployed as-is, VPC connection is set to none. I needed to change this to `Custom VPC`, and add my default VPC and security group here. *This has since been added directly into the template.yml file.*
+openapi_prefix="/prod" : Cette valeur doit correspondre à StageName: prod dans template.yml. Le projet exemple que j'ai tiré avait Prod avec un P majuscule, ce qui ne chargerait pas correctement les /docs et /redoc une fois déployés.
 
-- `openapi_prefix="/prod"`: This value needs to match `StageName: prod` in `template.yml`. The sample project I pulled from had `Prod` with a capital P, which would not load the /docs and /redoc properly when deployed.
-
-- Need to add `AWSLambdaVPCAccessExecutionRole` policy to the `fastapilambdarole`, otherwise will get errors when using the `sam deploy` command.
-
-
-## Next Steps
-- [ ] I'm currently using Lambda environment variables to set the database credentials (including password), so I need to figure out a more secure solution. Someone recommended to use KMS for this.
-
-- [x] Add VPC settings for Lambda to template.yml file if possible, so that no changes need to be made after deployment
-
-- [x] Add data samples which can be used to illustrate full set-up
-
-- [x] Add black formatting and pre-commit
+Besoin d'ajouter la politique AWSLambdaVPCAccessExecutionRole au fastapilambdarole, sinon vous obtiendrez des erreurs lors de l'utilisation de la commande sam deploy.
