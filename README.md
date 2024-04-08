@@ -1,20 +1,36 @@
 .
 ├── app
+
 |   ├── __init__.py
+
 │   ├── crud.py
+
 │   ├── database.py
+
 │   ├── main.py
+
 │   ├── models.py
+
 │   ├── routers
-│   │   ├── __init__.py
-│   │   ├── players.py
-│   │   ├── seasons.py
-│   │   └── teams.py
+
+│   │   
+    ├── __init__.py
+│   │   
+    ├── players.py
+│   │   
+    ├── seasons.py
+│   │   
+    └── teams.py
 │   └── schemas.py
+
 ├── .pre-commit.yaml
+
 ├── LICENSE
+
 ├── README.md
+
 ├── requirements.txt
+
 └── template.yml
 
 
